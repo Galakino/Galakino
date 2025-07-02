@@ -1,0 +1,545 @@
+#include <iostream>
+#include <termios.h>
+#include <unistd.h>
+#include <thread>
+#include <chrono>
+using namespace std;
+ 
+int getch(void) {
+    int ch;
+    struct termios oldt;
+    struct termios newt;
+    tcgetattr(STDIN_FILENO, &oldt);
+    newt = oldt;
+    newt.c_lflag &= ~(ICANON | ECHO);
+    tcsetattr(STDIN_FILENO, TCSANOW, &newt);
+    ch = getchar();
+    tcsetattr(STDIN_FILENO, TCSANOW, &oldt);
+    return ch;
+}
+
+void SetCursorPos(int XPos, int YPos) {
+    printf("\033[%d;%dH", YPos + 1, XPos + 1);
+}
+
+int main() {
+    printf("\033[?25l"); // oculta o cursor
+
+    int opcoes;
+    int movimentos = 0;
+    int vidas = 3;
+    int escolhaMapa = 1;
+    bool mapa = false;
+    bool temChave = false;
+    int temp;
+   
+
+    int px = 1, py = 1;
+
+    int m[15][60] = {
+        {1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1},
+        {1,2,0,0,0,0,0,1,10,0,0,0,10,1,0,0,0,10,1,1,1,1,1,1,1,1,0,0,0,1,1,1,0,0,1,10,0,1,1,1,1,1,0,11,1,1,1,1,0,0,0,1,0,0,0,1,1,1,1,1},
+        {1,1,1,0,0,1,1,1,0,0,6,0,0,1,0,0,1,0,0,0,0,0,0,1,0,0,0,1,0,0,0,0,0,0,1,1,0,0,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0,0,0,1},
+        {1,0,0,0,0,0,0,1,0,0,0,0,10,1,0,0,1,1,1,1,0,1,0,0,0,1,0,1,1,1,1,1,1,0,0,0,0,0,1,1,0,0,0,0,0,0,1,1,0,1,1,1,1,1,0,1,1,0,10,1},
+        {1,0,1,1,1,1,0,1,1,0,0,0,1,1,0,0,1,0,0,0,0,1,1,1,0,1,1,1,1,1,0,10,1,1,1,1,1,0,10,1,1,1,0,1,1,0,0,0,0,0,0,1,10,0,0,10,1,0,0,1},
+        {1,0,0,0,0,1,0,0,0,0,0,0,0,1,1,0,1,0,1,1,1,1,0,0,0,0,0,0,0,0,0,0,1,0,0,0,1,0,0,0,0,0,0,0,1,0,1,1,0,1,0,0,0,0,1,1,1,10,0,1},
+        {1,0,1,1,0,0,0,0,0,0,0,0,0,5,0,0,0,0,0,0,10,1,0,1,1,1,1,1,1,1,1,0,0,0,1,0,0,0,1,0,0,1,10,0,0,0,0,0,0,1,1,1,1,0,0,1,0,0,0,1},
+        {1,0,0,0,0,0,0,0,0,0,0,0,0,5,0,0,0,0,1,0,0,0,0,1,0,0,8,0,0,0,1,1,1,1,1,1,1,1,1,0,1,1,0,0,1,1,1,1,1,1,10,1,0,0,0,0,0,0,1,1},
+        {1,0,0,1,1,1,0,0,0,4,0,0,0,5,0,0,0,0,1,1,1,1,0,1,0,0,1,1,0,0,1,0,0,0,1,0,0,0,1,0,0,0,0,0,1,10,0,0,0,0,0,0,0,10,1,1,0,1,1,1},
+        {1,0,0,0,10,1,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,1,0,1,0,1,1,1,1,0,0,0,1,0,0,0,1,0,10,0,1,1,1,0,0,0,0,1,1,1,1,0,0,0,0,1,0,10,1,1},
+        {1,1,0,0,0,1,1,1,1,0,0,0,1,1,0,0,0,1,1,1,1,1,0,1,0,0,0,0,0,0,10,1,1,1,1,1,1,0,1,0,0,0,0,0,0,1,0,10,1,0,1,0,1,1,0,0,0,0,9,0},
+        {1,0,0,0,0,0,0,1,10,0,0,0,0,1,0,1,0,0,0,0,0,0,0,0,0,10,1,0,0,0,1,0,0,0,1,0,0,0,1,0,1,1,1,1,1,1,1,1,1,0,0,0,1,0,0,1,0,10,1,1},
+        {1,0,1,1,1,0,0,0,0,0,3,0,0,1,0,1,1,0,0,1,1,1,1,1,1,1,1,0,1,0,0,0,1,0,0,11,1,0,0,0,1,0,0,0,0,0,10,1,10,0,0,0,1,0,1,1,10,1,1,1},
+        {1,0,0,0,0,0,0,1,0,0,0,0,11,1,10,0,0,0,0,0,10,10,0,0,0,0,1,1,1,1,1,10,1,1,1,1,1,1,1,0,0,0,10,1,10,0,0,0,0,0,1,0,0,0,0,0,0,0,1,1},
+        {1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1},
+    };
+
+    int n[15][60] = {
+        {1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1},
+        {1,2,0,1,0,0,0,0,0,1,0,0,0,1,10,0,0,1,1,1,0,0,10,0,0,0,10,0,0,0,0,0,1,1,1,10,0,1,1,1,1,1,0,1,1,1,1,1,0,0,0,1,0,0,0,1,1,1,1,1},
+        {1,1,0,0,0,1,1,1,0,1,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,6,1,1,0,0,0,0,0,1,0,0,10,1,10,0,0,1,0,0,0,1,0,0,11,0,0,1},
+        {1,10,0,0,0,0,0,1,0,0,0,1,0,0,0,0,0,1,0,1,1,1,1,1,1,1,1,1,1,1,0,0,1,1,1,10,0,0,1,1,0,0,0,0,0,0,1,1,0,1,1,1,1,1,0,1,1,0,0,1},
+        {1,0,0,1,1,1,0,1,1,0,0,0,1,1,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,0,10,1,1,1,0,1,1,0,0,0,0,0,0,1,10,0,0,10,1,0,1,1},
+        {1,0,0,0,0,1,0,10,0,0,0,0,0,1,1,0,0,0,1,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,10,1,0,1,1,0,1,0,0,0,0,1,1,1,0,0,1},
+        {1,0,1,1,0,0,0,0,10,1,1,0,0,0,0,0,0,0,0,0,1,0,0,1,1,1,1,1,1,1,1,1,1,0,5,0,0,0,1,0,10,1,0,0,0,0,0,0,0,1,1,1,1,0,10,1,0,0,10,1},
+        {1,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,1,0,0,0,8,0,0,0,11,1,0,5,0,0,0,1,0,1,1,0,0,1,1,1,1,1,1,10,1,0,0,0,0,0,0,1,1},
+        {1,0,0,1,1,1,0,0,0,4,0,0,0,0,0,0,1,1,1,1,1,0,0,1,0,0,0,1,1,0,0,0,1,0,5,0,0,0,1,0,0,0,0,0,1,10,0,0,0,0,0,0,0,1,1,1,0,1,1,1},
+        {1,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,1,0,0,0,1,0,0,1,0,0,1,1,1,1,0,0,1,1,1,1,1,0,10,0,1,1,1,0,0,0,0,1,1,1,1,10,0,0,0,1,0,10,1,1},
+        {1,1,0,0,0,1,1,1,1,0,0,0,1,1,0,0,0,0,3,0,1,0,0,0,0,1,1,1,1,1,1,0,10,1,1,1,1,0,1,0,0,0,0,0,0,1,0,10,1,10,1,0,1,1,0,0,0,0,9,0},
+        {1,0,0,0,0,0,11,1,0,0,0,0,0,0,0,0,1,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,1,0,1,1,1,1,1,1,1,1,1,0,0,0,1,0,0,1,0,10,1,1},
+        {1,0,1,1,1,0,0,0,0,1,1,0,0,0,0,0,1,1,1,1,1,0,0,0,0,0,0,4,0,0,0,0,10,1,1,0,1,0,0,0,0,0,0,0,0,0,10,1,10,0,0,0,1,0,1,1,10,1,1,1},
+        {1,0,0,0,0,0,0,1,10,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,10,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,10,1,1,10,0,0,11,0,0,1,0,0,0,0,0,0,0,1,1},
+        {1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1},
+    };
+
+    while (opcoes != 4) {
+        system("clear");
+        cout << "===== FUGA DO LABIRINTO =====\n\n";
+        cout << "1. Jogar\n";
+        cout << "2. Nível\n";
+        cout << "3. Sobre\n";
+        cout << "4. Fim\n";
+        cout << "\nEscolha uma opcao: ";
+        cin >> opcoes;
+
+        system("clear");
+
+        if (opcoes == 1) {
+            char x;
+            char y;
+           
+            int ex = 8, ey = 9; // inimigo
+           
+            int inimigos_x[2] = {8, 12};
+            int inimigos_y[2] = {9, 27};
+           
+            if(escolhaMapa == 1) {
+                bool jogando = true;
+            do{
+                // Imprime a matriz
+                bool botao_pressionado = true;
+
+                for (int i = 0; i < 15; i++) {
+                    for (int j = 0; j < 60; j++) {
+                        if (i == px && j == py)
+                            cout << "$";
+                        else if (i == ex && j == ey){
+                            cout << "I";
+                        }else if (m[i][j] == 6 && ((px == i && py == j) || (m[i][j] == 6 && m[i][j] == 6))) {
+                            botao_pressionado = false;
+                            cout << "\033[41m" << " " << "\033[0m"; // botão pressionado
+                           
+                        } else if (m[i][j] == 8){ cout << "🔑";
+                        }else {
+                            switch (m[i][j]) {
+                                case 0: cout << " "; break;
+                                case 1: printf("\033[0;44m"); cout << " "; printf("\033[0m"); break;
+                                case 3: cout << "■"; break;
+                                case 5:
+                                    if (botao_pressionado){
+                                        cout << " "; // portão some
+                                    }else{
+                                        cout << "Ⅲ"; // portão visível
+                                    }
+                                    break;
+                                case 6: cout << "\033[41m" << " " << "\033[0m"; break;
+                                case 9: cout << "⛩"; break;
+                                case 11: cout << "♥"; break;
+                                default: cout << " ";
+                            }
+                        }
+                    }
+                    cout << endl;
+                }
+
+                cout << "Movimentos: " << movimentos << " | Vidas: " << vidas << "\n";
+               
+                x = getch();
+
+                int novo_px = px;
+                int novo_py = py;
+               
+
+                if (x == 'w') novo_px--;
+                else if (x == 's') novo_px++;
+                else if (x == 'a') novo_py--;
+                else if (x == 'd') novo_py++;
+
+                // Se a nova posição for bloco (3), tenta empurrar
+                if (m[novo_px][novo_py] == 3) {
+                    int dir_x = novo_px - px;
+                    int dir_y = novo_py - py;
+                    int bloco_novo_x = novo_px + dir_x;
+                    int bloco_novo_y = novo_py + dir_y;
+
+                    if (m[bloco_novo_x][bloco_novo_y] == 0 || m[bloco_novo_x][bloco_novo_y] == 4 || m[bloco_novo_x][bloco_novo_y] == 6) {
+                        // Empurra o bloco
+                        m[bloco_novo_x][bloco_novo_y] = 3;
+                        m[novo_px][novo_py] = 0;
+                        px = novo_px;
+                        py = novo_py;
+                        movimentos++;
+                    }
+                }
+               
+                else if (m[novo_px][novo_py] == 0 || m[novo_px][novo_py] == 6 || m[novo_px][novo_py] == 8 ||  m[novo_px][novo_py] == 9 || m[novo_px][novo_py] == 4 || m[novo_px][novo_py] == 10 || m[novo_px][novo_py] == 2 || m[novo_px][novo_py] == 11 || (m[novo_px][novo_py] == 5 && botao_pressionado)) {
+                    px = novo_px;
+                    py = novo_py;
+                    movimentos++;
+                   
+                    //Chave
+                    if (m[px][py] == 8) {
+                    temChave = true;
+                    m[px][py] = 0; // remove a chave do mapa
+                    }
+                }
+               
+               
+                //Vida extra
+                if (m[px][py] == 11) {
+                if (vidas < 3) vidas++;
+                m[px][py] = 0; // só pode usar uma vez
+                }
+           
+                //Armadilha vida--
+                if (m[px][py] == 10) {
+                vidas--;
+                printf("\a"); // som de alerta
+                cout << "\033[31mAhh pisei em uma armadilha!\033[0m\n"; // texto vermelho
+                std::this_thread::sleep_for(std::chrono::milliseconds(500));
+               
+                if (vidas == 0) {
+                    system("clear");
+                    cout << "\n\n\n\t===== GAME OVER =====\n";
+                    cout << "\n\tAh não... Você pisou em uma armadilha :(\n";
+                    std::this_thread::sleep_for(std::chrono::seconds(2));
+                    cout << "\n\tPressione qualquer tecla para voltar ao menu...";
+                    getch();
+                    px = 1; py = 1;
+                    vidas = 3;
+                    movimentos = 0;
+                    main();
+                    break;
+                    }
+                }
+                   
+                // Porta de saída
+                if (m[px][py] == 9) {
+                    if (temChave) {
+                        system("clear");
+                        cout << "\n\n\n\t===== PARABÉNS! VOCÊ VENCEU! =====\n";
+                        cout << "\n\tVocê escapou do labirinto assustador com a chave!\n";
+                        for (int i = 0; i < 2; i++) {
+                            printf("\a"); // som 1
+                            fflush(stdout);
+                            usleep(200000); // 200 ms
+                   
+                            printf("\a"); // som 2
+                            fflush(stdout);
+                            usleep(100000); // 100 ms
+                   
+                            usleep(300000); // pausa
+                        }
+                   
+                        printf("\a"); // final
+                        fflush(stdout);
+                        std::this_thread::sleep_for(std::chrono::seconds(2));
+                        cout << "\n\tPronto para o próximo mapa?...";
+                        cout << "\n\tSim [s]        Não [n]";
+                        y = getch();
+                   
+                        if(y == 's'){
+                            px = 1; py = 1;
+                            vidas = 3;
+                            movimentos = 0;
+                            temChave = false;
+                            escolhaMapa = 2;
+                            break;
+                        } else if(y == 'n'){
+                            px = 1; py = 1;
+                            vidas = 3;
+                            movimentos = 0;
+                            temChave = false;
+                            main(); // retorna ao menu
+                            break;
+                        } else if(y != 's' && y != 'n'){
+                            cout << "\nOpção inválida! Retornando ao menu...\n";
+                            std::this_thread::sleep_for(std::chrono::seconds(2));
+                            px = 1; py = 1;
+                            vidas = 3;
+                            movimentos = 0;
+                            temChave = false;
+                            main(); // retorna ao menu
+                            break;
+                        }
+                        break;
+                    } else {
+                        cout << "\nVocê precisa da chave para sair!\n";
+                        std::this_thread::sleep_for(std::chrono::milliseconds(800));
+                    }
+                }
+
+
+                // Movimento do inimigo (mantido como antes)
+                int dist_x = px - ex;
+                int dist_y = py - ey;
+                int abs_x = dist_x < 0 ? -dist_x : dist_x;
+                int abs_y = dist_y < 0 ? -dist_y : dist_y;
+
+                if (abs_x <= 5 && abs_y <= 5) {
+                    int passo_x = 0, passo_y = 0;
+                    if (abs_x >= abs_y)
+                        passo_x = (dist_x > 0) ? 1 : (dist_x < 0 ? -1 : 0);
+                    else
+                        passo_y = (dist_y > 0) ? 1 : (dist_y < 0 ? -1 : 0);
+
+                    int proximo_ex = ex + passo_x;
+                    int proximo_ey = ey + passo_y;
+
+                    if (m[proximo_ex][proximo_ey] == 0 && !(proximo_ex == px && proximo_ey == py) || m[proximo_ex][proximo_ey] == 4 || m[proximo_ex][proximo_ey] == 5) {
+                        ex = proximo_ex;
+                        ey = proximo_ey;
+                    }
+                   
+                    if (proximo_ex == px && proximo_ey == py) {
+                        vidas--;
+                        printf("\a");
+                       
+                        if (vidas == 0) {
+                            system("clear");
+                            cout << "\n\n\n\t===== GAME OVER =====\n";
+                            cout << "\n\tO inimigo era muito forte...\n";
+                            cout << "\n\tNa próxima você consegue!\n";
+                            std::this_thread::sleep_for(std::chrono::seconds(2));
+                            cout << "\n\tPressione qualquer tecla para voltar ao menu...";
+                            getch();
+                            px = 1; py = 1;
+                            vidas = 3;
+                            movimentos = 0;
+                            main();
+                            break;
+                        }
+                    }
+                }
+                SetCursorPos(0, 0);
+            } while(jogando);
+       
+            } else if(escolhaMapa == 2){
+                bool jogando = true;
+                do{
+                    // Imprime a matriz
+                    bool botao_pressionado = true;
+                    for (int i = 0; i < 15; i++) {
+                        for (int j = 0; j < 60; j++) {
+                            if (i == px && j == py){
+                                cout << "$";
+                            } else {
+                                bool isInimigo = false;
+                                for (int k = 0; k < 2; k++) {
+                                    if (i == inimigos_x[k] && j == inimigos_y[k]) {
+                                        cout << "I";
+                                        isInimigo = true;
+                                        break;
+                                    }
+                                }
+                           
+                                if (isInimigo) {
+                                    // imprime o inimigo e pula para o próximo
+                                    continue;
+                                } else if (n[i][j] == 6 && ((px == i && py == j) || (n[i][j] == 6 && n[i][j] == 6))) {
+                                    botao_pressionado = false;
+                                    cout << "\033[41m" << " " << "\033[0m"; // botão pressionado
+                                } else if (n[i][j] == 8){
+                                    cout << "🔑";
+                                } else {
+                                    switch (n[i][j]) {
+                                        case 0: cout << " "; break;
+                                        case 1: printf("\033[0;44m"); cout << " "; printf("\033[0m"); break;
+                                        case 3: cout << "■"; break;
+                                        case 5:
+                                            if (botao_pressionado){
+                                                cout << " "; // portão some
+                                            } else {
+                                                cout << "Ⅲ"; // portão visível
+                                            }
+                                            break;
+                                        case 6: cout << "\033[41m" << " " << "\033[0m"; break;
+                                        case 9: cout << "⛩"; break;
+                                        case 11: cout << "♥"; break;
+                                        default: cout << " ";
+                                    }
+                                }
+                            }
+                        }
+                        cout << endl;
+                    }
+           
+                    cout << "Movimentos: " << movimentos << " | Vidas: " << vidas << "\n";
+           
+                    x = getch();
+           
+                    int novo_px = px;
+                    int novo_py = py;
+           
+                    if (x == 'w') novo_px--;
+                    else if (x == 's') novo_px++;
+                    else if (x == 'a') novo_py--;
+                    else if (x == 'd') novo_py++;
+           
+                    // Se a nova posição for bloco (3), tenta empurrar
+                    if (n[novo_px][novo_py] == 3) {
+                        int dir_x = novo_px - px;
+                        int dir_y = novo_py - py;
+                        int bloco_novo_x = novo_px + dir_x;
+                        int bloco_novo_y = novo_py + dir_y;
+           
+                        if (n[bloco_novo_x][bloco_novo_y] == 0 || n[bloco_novo_x][bloco_novo_y] == 4 || n[bloco_novo_x][bloco_novo_y] == 6) {
+                            // Empurra o bloco
+                            n[bloco_novo_x][bloco_novo_y] = 3;
+                            n[novo_px][novo_py] = 0;
+                            px = novo_px;
+                            py = novo_py;
+                            movimentos++;
+                        }
+                    }
+           
+                    else if (n[novo_px][novo_py] == 0 || n[novo_px][novo_py] == 6 || n[novo_px][novo_py] == 8 ||  n[novo_px][novo_py] == 9 || n[novo_px][novo_py] == 4 || n[novo_px][novo_py] == 10 || n[novo_px][novo_py] == 11 || (n[novo_px][novo_py] == 5 && botao_pressionado)) {
+                        px = novo_px;
+                        py = novo_py;
+                        movimentos++;
+           
+                        //Chave
+                        if (n[px][py] == 8) {
+                            temChave = true;
+                            n[px][py] = 0; // remove a chave do mapa
+                        }
+                    }
+           
+                    //Vida extra
+                    if (n[px][py] == 11) {
+                        if (vidas < 3) vidas++;
+                        n[px][py] = 0; // só pode usar uma vez
+                    }
+           
+                    //Armadilha vida--
+                    if (n[px][py] == 10) {
+                        vidas--;
+                        printf("\a");
+                        cout << "\033[31mAhh pisei em uma armadilha!\033[0m\n"; // texto vermelho
+                        std::this_thread::sleep_for(std::chrono::milliseconds(700));
+           
+                        if (vidas == 0) {
+                            system("clear");
+                            cout << "\n\n\n\t===== GAME OVER =====\n";
+                            cout << "\n\tAh não... Você pisou em uma armadilha :(\n";
+                            std::this_thread::sleep_for(std::chrono::seconds(2));
+                            cout << "\n\tPressione qualquer tecla para voltar ao menu...";
+                            getch();
+                            px = 1; py = 1;
+                            vidas = 3;
+                            movimentos = 0;
+                            main();
+                            break;
+                        }
+                    }
+           
+                    // Porta de saída
+                    if (n[px][py] == 9) {
+                        if (temChave) {
+                            system("clear");
+                            cout << "\n\n\n\t===== PARABÉNS! VOCÊ VENCEU! =====\n";
+                            cout << "\n\tVocê escapou do labirinto monstruoso com a chave!\n";
+                            for (int i = 0; i < 2; i++) {
+                                printf("\a"); // som 1
+                                fflush(stdout);
+                                usleep(200000); // 200 ms
+                       
+                                printf("\a"); // som 2
+                                fflush(stdout);
+                                usleep(100000); // 100 ms
+                       
+                                usleep(300000); // pausa
+                            }
+                       
+                            printf("\a"); // final
+                            fflush(stdout);
+                            std::this_thread::sleep_for(std::chrono::seconds(2));
+                            cout << "\n\tPressione qualquer tecla para voltar ao menu...";
+                            getch();
+                            px = 1; py = 1;
+                            vidas = 3;
+                            movimentos = 0;
+                            temChave = false;
+                            main(); // retorna ao menu
+                            break;
+                        } else {
+                            cout << "\nVocê precisa da chave para sair!\n";
+                            std::this_thread::sleep_for(std::chrono::milliseconds(800));
+                        }
+                    }
+           
+                    for (int k = 0; k < 2; k++) {
+                        int dist_x = px - inimigos_x[k];
+                        int dist_y = py - inimigos_y[k];
+                        int abs_x = dist_x < 0 ? -dist_x : dist_x;
+                        int abs_y = dist_y < 0 ? -dist_y : dist_y;
+           
+                        if (abs_x <= 5 && abs_y <= 5) {
+                            int passo_x = 0, passo_y = 0;
+                            if (abs_x >= abs_y)
+                                passo_x = (dist_x > 0) ? 1 : (dist_x < 0 ? -1 : 0);
+                            else
+                                passo_y = (dist_y > 0) ? 1 : (dist_y < 0 ? -1 : 0);
+           
+                            int proximo_x = inimigos_x[k] + passo_x;
+                            int proximo_y = inimigos_y[k] + passo_y;
+           
+                            if ((n[proximo_x][proximo_y] == 0 || n[proximo_x][proximo_y] == 4 || m[proximo_x][proximo_y] == 10 || n[proximo_x][proximo_y] == 5) &&
+                                !(proximo_x == px && proximo_y == py)) {
+                                inimigos_x[k] = proximo_x;
+                                inimigos_y[k] = proximo_y;
+                            }
+           
+                            if (proximo_x == px && proximo_y == py) {
+                                vidas--;
+                                printf("\a");
+                                cout << "\033[31mDano Inimigo!\033[0m\n"; // texto vermelho
+                                std::this_thread::sleep_for(std::chrono::milliseconds(700));
+                               
+                                if (vidas == 0) {
+                                    system("clear");
+                                    cout << "\n\n\n\t===== GAME OVER =====\n";
+                                    cout << "\n\tO inimigo era muito forte...\n";
+                                    cout << "\n\tNa próxima você consegue!\n";
+                                    std::this_thread::sleep_for(std::chrono::seconds(2));
+                                    cout << "\n\tPressione qualquer tecla para voltar ao menu...";
+                                    getch();
+                                    px = 1; py = 1;
+                                    vidas = 3;
+                                    movimentos = 0;
+                                    main();
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    SetCursorPos(0, 0);
+                } while(jogando);
+            } else if(escolhaMapa == 3){
+                system("clear");
+                cout << "\n\n\n\t===== MAPA EM DESENVOLVIMENTO =====\n";
+                cout << "\n\tClicou atoa...\n";
+                std::this_thread::sleep_for(std::chrono::seconds(3));
+            }
+
+        } else if (opcoes == 2) {
+            cout << "\nEscolha o mapa que quer jogar:\n";
+            cout << "\n\tMapa 1 - Facil (um inimigo apenas, armadilhas espalhadas)\n";
+            cout << "\n\tMapa 2 - Médio (dois inimigos, armadilhas espalhadas)\n";
+            cout << "\n\tMapa 3 - Dificil - *EM DESENVOLVIMENTO*\n\t";
+            cin >> escolhaMapa;
+           
+            if (escolhaMapa < 1 || escolhaMapa > 3) { //Caso o jogador coloque um número que não seja 1, 2 ou 3.
+                escolhaMapa = 1;
+            }
+            cout << "Mapa alterado!\n";
+            system("pause");
+        } else if (opcoes == 3) {
+            cout << "Desenvolvedores: Gabriel de Barros e Lucas Cavalcante Leandro\n";
+            cout << "Professor: Thiago Felski Pereira\n";
+            cout << "Disciplina: Algoritmos e Programação\n\n";
+           
+            cout << "Pressione qualquer tecla para voltar ao menu...\n";
+            cin.ignore(); // limpa o '\n' deixado no buffer
+            getch();
+        } else if (opcoes == 4) {
+            cout << "Até mais :)";
+        } else {
+            cout << "Opção inválida. Pressione qualquer tecla para voltar ao menu...\n";
+            getch();
+        }
+    }
+
+    return 0;
+}
+
